@@ -17,7 +17,6 @@ struct SettingsView: View {
         Form {
             Section {
                 VStack(alignment: .leading, spacing: 12) {
-                    // Hold Duration Slider
                     HStack {
                         Text("Hold Duration:")
                             .frame(width: 100, alignment: .trailing)
@@ -31,14 +30,13 @@ struct SettingsView: View {
                             .frame(width: 40, alignment: .leading)
                     }
                     
-                    // Alert Text Input
                     HStack {
                         Text("Alert Text:")
                             .frame(width: 100, alignment: .trailing)
                         
                         TextField("", text: $customQuitText)
                             .textFieldStyle(.roundedBorder)
-                            .frame(width: 240) // Match slider width + text width approx
+                            .frame(width: 240) // Match slider width.
                     }
                 }
                 .padding(.vertical, 8)
@@ -51,7 +49,7 @@ struct SettingsView: View {
                 HStack {
                     Text("System:")
                         .frame(width: 100, alignment: .trailing)
-                        .hidden() // Placeholder for alignment
+                        .hidden() // Spacer for alignment.
                     
                     Toggle("Launch at Login", isOn: $launchAtLogin)
                         .toggleStyle(.checkbox)

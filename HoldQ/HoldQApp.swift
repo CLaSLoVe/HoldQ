@@ -15,28 +15,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var eventTap: CFMachPort?
     var runLoopSource: CFRunLoopSource?
     
-    // 记录 Command+Q 的状态
     var isCommandQDown = false
-    // 新增标志位：是否已经触发过退出（用于一次按住只触发一次）
+    // Prevent multiple triggers for a single press.
     var hasTriggeredQuit = false
     var commandQStartTime: TimeInterval = 0
     var quitTimer: Timer?
     
-    // 权限监控
+    // Permission monitoring.
     var lastPermissionState: Bool = false
     var permissionCheckTimer: Timer?
     
-    // 设置窗口引用
     var settingsWindow: NSWindow?
-    
-    // 提示窗口
     var hudWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // 请求通知权限（用于发送状态变更通知）
+        // Request notification permissions for status updates.
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
         
-        // 设置菜单栏图标
+        // Configure the menu bar icon.
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem?.button {
             button.image = NSImage(systemSymbolName: "command.circle", accessibilityDescription: "HoldQ")
@@ -48,7 +44,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(NSMenuItem(title: "Quit HoldQ", action: #selector(quitApp), keyEquivalent: "q"))
         statusItem?.menu = menu
         
-        // 申请辅助功能权限
+        // Request accessibility permissions.
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true]
         let accessEnabled = AXIsProcessTrustedWithOptions(options as CFDictionary)
         
@@ -60,7 +56,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             startEventTap()
         }
         
-        // 启动定时检测权限变更
+        // Monitor permission changes.
         permissionCheckTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
             self?.checkPermissionChange()
         }
@@ -73,22 +69,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             lastPermissionState = current
             
             if current {
-                // 变成了有权限：尝试直接启动 Tap，或者重启 App
+                // Access granted: restart event tap.
                 print("Gained access, restarting event tap...")
                 startEventTap()
                 
                 sendNotification(title: "Permission Granted", body: "HoldQ is now active.")
             } else {
-                // 变成了没权限
+                // Access lost.
                 print("Lost access")
-                // 停止 Tap
+                // Stop event tap.
                 if let tap = eventTap {
                     CGEvent.tapEnable(tap: tap, enable: false)
                 }
-                // 提示用户并退出
+                // Notify user and quit.
                 sendNotification(title: "Permission Lost", body: "HoldQ requires Accessibility access. Quitting...")
                 
-                // 延迟退出，给用户一点时间看通知
+                // Delay exit to let the user read the notification.
                 DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
                     NSApp.terminate(nil)
                 }
@@ -121,10 +117,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             window.center()
             window.title = "HoldQ Settings"
             
-            // 提升窗口层级，确保它浮在普通窗口之上
+            // Float above other windows.
             window.level = .floating
             
-            // 使用 NSHostingController 包装 View，更加规范
+            // Wrap the SwiftUI view.
             let hostingController = NSHostingController(rootView: SettingsView())
             window.contentViewController = hostingController
             
@@ -132,7 +128,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             settingsWindow = window
         }
         
-        // 激活应用，确保能获得焦点
+        // Activate app to ensure focus.
         NSApp.activate(ignoringOtherApps: true)
         
         settingsWindow?.makeKeyAndOrderFront(nil)
@@ -168,15 +164,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func handle(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
-        // 12 是 Q 键
+        // 12 corresponds to the 'Q' key.
         let isQ = event.getIntegerValueField(.keyboardEventKeycode) == 12
         let flags = event.flags
         let isCommand = flags.contains(.maskCommand)
         
-        // 处理 KeyDown
         if type == .keyDown {
             if isCommand && isQ {
-                // 如果已经在等待释放状态，直接吞掉事件，不重复触发
+                // Swallow event if waiting for release.
                 if hasTriggeredQuit {
                     return nil
                 }
@@ -185,39 +180,37 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     isCommandQDown = true
                     commandQStartTime = Date().timeIntervalSince1970
                     
-                    // 显示提示
+                    // Show HUD.
                     showHUD()
                     
-                    // 获取设置中的持续时间 (default 0.5)
+                    // Get hold duration (default: 0.5s).
                     let duration = UserDefaults.standard.double(forKey: "holdDuration")
                     let actualDuration = duration > 0 ? duration : 0.5
                     
-                    // 定时检查
+                    // Start the timer.
                     quitTimer?.invalidate()
                     quitTimer = Timer.scheduledTimer(withTimeInterval: actualDuration, repeats: false) { [weak self] _ in
                         self?.triggerQuit()
                     }
                 }
-                return nil // 吞掉 Cmd+Q
+                return nil // Consume Cmd+Q.
             }
         }
         
-        // 处理 KeyUp
         if type == .keyUp {
             if isQ {
-                // 复位逻辑：只有当 Q 键真正抬起时，才允许下一次触发
+                // Reset only when Q is released.
                 if isCommandQDown || hasTriggeredQuit {
                     isCommandQDown = false
                     hasTriggeredQuit = false
                     
                     quitTimer?.invalidate()
                     hideHUD()
-                    return nil // 吞掉这个抬起事件，防止意外
+                    return nil // Consume key up to prevent accidental input.
                 }
             }
         }
         
-        // 处理 FlagsChanged (比如松开 Command 键)
         if type == .flagsChanged {
             if !flags.contains(.maskCommand) {
                 if isCommandQDown || hasTriggeredQuit {
@@ -234,20 +227,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func triggerQuit() {
-        // 只有当 Command+Q 还在按下状态，且还没触发过时才执行
+        // Trigger only if held and not yet triggered.
         guard isCommandQDown, !hasTriggeredQuit else { return }
         
-        // 标记为已触发，防止连续退出
+        // Prevent repeated triggers.
         hasTriggeredQuit = true
         
-        // 震动反馈
+        // Haptic feedback.
         NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
         
-        // 获取当前前台应用并退出它
+        // Terminate the frontmost app.
         if let frontApp = NSWorkspace.shared.frontmostApplication {
-            // 避免杀掉自己
+            // Don't kill self.
             if frontApp.bundleIdentifier != Bundle.main.bundleIdentifier {
-                // 使用 AppleScript 优雅退出，这样会触发保存提示
+                // Use AppleScript for a graceful exit (triggers save prompt).
                 let scriptSource = """
                 tell application "\(frontApp.localizedName ?? frontApp.bundleIdentifier ?? "")" to quit
                 """
@@ -257,7 +250,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     script.executeAndReturnError(&error)
                     if let error = error {
                         print("AppleScript error: \(error)")
-                        // 兜底：如果 AppleScript 失败（比如名字不对），再试一次普通 terminate
+                        // Fallback to standard termination if AppleScript fails.
                         frontApp.terminate()
                     }
                 } else {
@@ -266,7 +259,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         
-        // 触发后立刻隐藏 HUD，但保持 isCommandQDown 和 hasTriggeredQuit 为 true，直到物理松手
+        // Hide HUD, but keep state flags until key release.
         hideHUD()
     }
     
@@ -274,12 +267,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     func showHUD() {
         DispatchQueue.main.async {
-            // 获取自定义文字
+            // Fetch custom text.
             let customText = UserDefaults.standard.string(forKey: "customQuitText") ?? "Keep Holding to Quit"
             
             if self.hudWindow == nil {
                 let window = NSWindow(
-                    contentRect: NSRect(x: 0, y: 0, width: 240, height: 60), // 略微加宽以适应较长文字
+                    contentRect: NSRect(x: 0, y: 0, width: 240, height: 60), // Slightly wider for long text.
                     styleMask: [.borderless],
                     backing: .buffered,
                     defer: false
@@ -301,7 +294,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 label.alignment = .center
                 label.translatesAutoresizingMaskIntoConstraints = false
                 
-                // 给 label 设置一个 tag，方便后面更新文字
+                // Tag for future updates.
                 label.tag = 100
                 
                 visualEffect.addSubview(label)
@@ -315,7 +308,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 window.contentView = visualEffect
                 self.hudWindow = window
             } else {
-                // 更新文字（如果窗口已创建）
+                // Update text if window exists.
                 if let visualEffect = self.hudWindow?.contentView as? NSVisualEffectView,
                    let label = visualEffect.viewWithTag(100) as? NSTextField {
                     label.stringValue = customText
@@ -323,7 +316,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
             
             if let window = self.hudWindow, let screen = NSScreen.main {
-                // 动态调整窗口宽度以适应文字
+                // Adjust width to fit text.
                 let textWidth = (customText as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 16, weight: .bold)]).width
                 let newWidth = max(200, textWidth + 40)
                 var frame = window.frame
@@ -333,7 +326,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 let screenRect = screen.visibleFrame
                 let windowRect = window.frame
                 let x = (screenRect.width - windowRect.width) / 2 + screenRect.minX
-                let y = (screenRect.height - windowRect.height) * 0.3 + screenRect.minY // 屏幕中下部
+                let y = (screenRect.height - windowRect.height) * 0.3 + screenRect.minY // Position in the lower-middle screen.
                 window.setFrameOrigin(NSPoint(x: x, y: y))
                 
                 window.alphaValue = 0
@@ -346,7 +339,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func hideHUD() {
         DispatchQueue.main.async {
             self.hudWindow?.animator().alphaValue = 0
-            // 动画结束后隐藏
+            // Hide after animation.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                 if self.hudWindow?.alphaValue == 0 {
                     self.hudWindow?.orderOut(nil)
