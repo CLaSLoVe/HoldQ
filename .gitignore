@@ -1,0 +1,25 @@
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.fseventsd
+.Spotlight-V100
+.Trashes
+
+xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+*.ouch
+
+build/
+DerivedData/
+*.moved-aside
+*.xccheckout
+*.xcscmblueprint
+*.hmap
+
+".gitignore" 41L, 425B
