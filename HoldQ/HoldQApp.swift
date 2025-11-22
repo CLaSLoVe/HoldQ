@@ -27,22 +27,31 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     var settingsWindow: NSWindow?
     var hudWindow: NSWindow?
+    
+    // Observation token
+    var defaultsObserver: AnyCancellable?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Request notification permissions for status updates.
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
         
-        // Configure the menu bar icon.
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        if let button = statusItem?.button {
-            button.image = NSImage(systemSymbolName: "command.circle", accessibilityDescription: "HoldQ")
-        }
+        // Configure menu bar icon visibility based on settings.
+        updateMenuBarIcon()
         
-        let menu = NSMenu()
-        menu.addItem(NSMenuItem(title: "Settings...", action: #selector(openSettings), keyEquivalent: ","))
-        menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "Quit HoldQ", action: #selector(quitApp), keyEquivalent: "q"))
-        statusItem?.menu = menu
+        // DEBUG SAFETY: If running in Xcode and icon is hidden, force open settings
+        // so you aren't locked out (since Xcode kills the previous instance, preventing "reopen").
+        #if DEBUG
+        if UserDefaults.standard.bool(forKey: "hideMenuBarIcon") {
+            openSettings()
+        }
+        #endif
+        
+        // Observe UserDefaults for changes to "hideMenuBarIcon".
+        // Using NotificationCenter for simplicity as KVO with UserDefaults in Swift can be verbose.
+        defaultsObserver = NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)
+            .sink { [weak self] _ in
+                self?.updateMenuBarIcon()
+            }
         
         // Request accessibility permissions.
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true]
@@ -60,6 +69,42 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         permissionCheckTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
             self?.checkPermissionChange()
         }
+    }
+    
+    // Handle reopening (e.g. clicking the app icon in Finder/Launchpad).
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        openSettings()
+        return true
+    }
+    
+    func updateMenuBarIcon() {
+        let hideIcon = UserDefaults.standard.bool(forKey: "hideMenuBarIcon")
+        
+        if hideIcon {
+            // Remove if exists
+            if let item = statusItem {
+                NSStatusBar.system.removeStatusItem(item)
+                statusItem = nil
+            }
+        } else {
+            // Create if missing
+            if statusItem == nil {
+                setupStatusItem()
+            }
+        }
+    }
+    
+    func setupStatusItem() {
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        if let button = statusItem?.button {
+            button.image = NSImage(systemSymbolName: "command.circle", accessibilityDescription: "HoldQ")
+        }
+        
+        let menu = NSMenu()
+        menu.addItem(NSMenuItem(title: "Settings...", action: #selector(openSettings), keyEquivalent: ","))
+        menu.addItem(NSMenuItem.separator())
+        menu.addItem(NSMenuItem(title: "Quit HoldQ", action: #selector(quitApp), keyEquivalent: "q"))
+        statusItem?.menu = menu
     }
     
     func checkPermissionChange() {
@@ -109,7 +154,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func openSettings() {
         if settingsWindow == nil {
             let window = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 450, height: 200),
+                contentRect: NSRect(x: 0, y: 0, width: 450, height: 380), // Increased height for GroupBox layout
                 styleMask: [.titled, .closable, .miniaturizable],
                 backing: .buffered,
                 defer: false
@@ -122,6 +167,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             
             // Wrap the SwiftUI view.
             let hostingController = NSHostingController(rootView: SettingsView())
+            
             window.contentViewController = hostingController
             
             window.isReleasedWhenClosed = false

@@ -11,69 +11,86 @@ import ServiceManagement
 struct SettingsView: View {
     @AppStorage("holdDuration") private var holdDuration: Double = 0.5
     @AppStorage("customQuitText") private var customQuitText: String = "Keep Holding to Quit"
+    @AppStorage("hideMenuBarIcon") private var hideMenuBarIcon: Bool = false
     @State private var launchAtLogin: Bool = false
     
     var body: some View {
-        Form {
-            Section {
-                VStack(alignment: .leading, spacing: 12) {
+        VStack(spacing: 20) {
+            GroupBox(label: Text("Behavior").bold()) {
+                VStack(alignment: .leading, spacing: 16) {
                     HStack {
                         Text("Hold Duration:")
                             .frame(width: 100, alignment: .trailing)
                         
                         Slider(value: $holdDuration, in: 0.1...2.0, step: 0.1)
-                            .frame(width: 200)
                         
                         Text(String(format: "%.1f s", holdDuration))
                             .monospacedDigit()
-                            .foregroundColor(.secondary)
-                            .frame(width: 40, alignment: .leading)
+                            .foregroundStyle(.secondary)
+                            .frame(width: 40, alignment: .trailing)
                     }
                     
                     HStack {
                         Text("Alert Text:")
                             .frame(width: 100, alignment: .trailing)
                         
-                        TextField("", text: $customQuitText)
+                        TextField("Text to display", text: $customQuitText)
                             .textFieldStyle(.roundedBorder)
-                            .frame(width: 240) // Match slider width.
                     }
                 }
-                .padding(.vertical, 8)
+                .padding(10)
             }
             
-            Divider()
-                .padding(.vertical, 8)
-            
-            Section {
-                HStack {
-                    Text("System:")
-                        .frame(width: 100, alignment: .trailing)
-                        .hidden() // Spacer for alignment.
+            GroupBox(label: Text("System").bold()) {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Text("") // Spacer for alignment
+                            .frame(width: 100)
+                        Toggle("Launch at Login", isOn: $launchAtLogin)
+                            .toggleStyle(.checkbox)
+                            .onChange(of: launchAtLogin) { newValue in
+                                toggleLaunchAtLogin(enabled: newValue)
+                            }
+                    }
                     
-                    Toggle("Launch at Login", isOn: $launchAtLogin)
-                        .toggleStyle(.checkbox)
-                        .onChange(of: launchAtLogin) { newValue in
-                            toggleLaunchAtLogin(enabled: newValue)
+                    HStack(alignment: .top) {
+                        Text("") // Spacer for alignment
+                            .frame(width: 100)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Toggle("Hide Menu Bar Icon", isOn: $hideMenuBarIcon)
+                                .toggleStyle(.checkbox)
+                            
+                            Text("If hidden, relaunch the app to open Settings.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
-                    
-                    Spacer()
+                    }
                 }
+                .padding(10)
             }
             
             Spacer()
             
             HStack {
+                Button(role: .destructive) {
+                    NSApp.terminate(nil)
+                } label: {
+                    Text("Quit HoldQ")
+                        .foregroundStyle(.red)
+                }
+                .keyboardShortcut("q", modifiers: .command)
+                
                 Spacer()
+                
                 Button("Done") {
                     NSApp.keyWindow?.close()
                 }
                 .keyboardShortcut(.defaultAction)
             }
-            .padding(.top, 10)
         }
         .padding(20)
-        .frame(width: 450, height: 200)
+        .frame(width: 450)
+        .fixedSize(horizontal: true, vertical: false) // Ensure width is respected
         .onAppear {
             checkLaunchAtLogin()
         }
