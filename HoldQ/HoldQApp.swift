@@ -213,10 +213,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // 12 corresponds to the 'Q' key.
         let isQ = event.getIntegerValueField(.keyboardEventKeycode) == 12
         let flags = event.flags
+        
+        // Strict modifier check: Only Command should be pressed.
+        // We want to allow Cmd+Q, but NOT Ctrl+Cmd+Q (Lock Screen) or Shift+Cmd+Q (Logout).
         let isCommand = flags.contains(.maskCommand)
+        let isControl = flags.contains(.maskControl)
+        let isOption = flags.contains(.maskAlternate)
+        let isShift = flags.contains(.maskShift)
+        
+        // Only intercept if Command is down, and NO other modifiers are down.
+        let isPureCommandQ = isCommand && !isControl && !isOption && !isShift
         
         if type == .keyDown {
-            if isCommand && isQ {
+            if isPureCommandQ && isQ {
                 // Swallow event if waiting for release.
                 if hasTriggeredQuit {
                     return nil
