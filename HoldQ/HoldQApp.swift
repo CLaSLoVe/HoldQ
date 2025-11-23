@@ -287,19 +287,29 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             // Don't kill self.
             if frontApp.bundleIdentifier != Bundle.main.bundleIdentifier {
                 // Use AppleScript for a graceful exit (triggers save prompt).
-                let scriptSource = """
-                tell application "\(frontApp.localizedName ?? frontApp.bundleIdentifier ?? "")" to quit
-                """
+                // Prefer Bundle Identifier as it is unique and reliable.
+                var scriptSource = ""
+                if let bundleId = frontApp.bundleIdentifier {
+                    scriptSource = "tell application id \"\(bundleId)\" to quit"
+                } else {
+                    let appName = frontApp.localizedName ?? ""
+                    scriptSource = "tell application \"\(appName)\" to quit"
+                }
                 
-                if let script = NSAppleScript(source: scriptSource) {
+                var scriptSuccess = false
+                if !scriptSource.isEmpty, let script = NSAppleScript(source: scriptSource) {
                     var error: NSDictionary?
                     script.executeAndReturnError(&error)
-                    if let error = error {
-                        print("AppleScript error: \(error)")
-                        // Fallback to standard termination if AppleScript fails.
-                        frontApp.terminate()
+                    if error == nil {
+                        scriptSuccess = true
+                    } else {
+                        print("AppleScript error: \(String(describing: error))")
                     }
-                } else {
+                }
+                
+                // Fallback to standard termination if AppleScript fails.
+                if !scriptSuccess {
+                    print("Falling back to standard terminate for \(frontApp.localizedName ?? "unknown app")")
                     frontApp.terminate()
                 }
             }
