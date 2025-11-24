@@ -210,6 +210,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func handle(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
+        // Handle system disabling the event tap (auto-recovery)
+        if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+            print("Event tap disabled by system (type: \(type.rawValue)). Re-enabling...")
+            if let tap = self.eventTap {
+                CGEvent.tapEnable(tap: tap, enable: true)
+            }
+            return Unmanaged.passUnretained(event)
+        }
+        
         // 12 corresponds to the 'Q' key.
         let isQ = event.getIntegerValueField(.keyboardEventKeycode) == 12
         let flags = event.flags
